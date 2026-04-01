@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"boot.dev/linko/internal/linkoerr"
 )
 
 type ShortURL struct {
@@ -71,9 +73,11 @@ func (s *Store) List(ctx context.Context) ([]ShortURL, error) {
 	ch := make(chan ShortURL)
 	go s.walk(ctx, ch)
 	var urls []ShortURL
+	var errs []error
 	for e := range ch {
 		if e.Err != nil {
-			return urls, e.Err
+			errs = append(errs, e.Err)
+			return urls, errors.Join(errs...)
 		}
 		urls = append(urls, e)
 		if len(urls) >= maxURLs {
@@ -93,7 +97,7 @@ func (s *Store) walk(ctx context.Context, ch chan<- ShortURL) {
 		if !e.IsDir() {
 			long, err := s.Lookup(ctx, e.Name())
 			if err != nil {
-				s.logger.Info("read %s: %v", filepath.Join(s.dir, e.Name()), err)
+				linkoerr.WithAttrs(err, "path", filepath.Join(s.dir, e.Name()))
 				ch <- ShortURL{Err: err}
 				continue
 			}
@@ -110,7 +114,7 @@ func (s *Store) Lookup(_ context.Context, short string) (string, error) {
 		return "", ErrNotFound
 	}
 	if err != nil {
-		return "", fmt.Errorf("read %s: %w", shortcodeFilepath, err)
+		return "", err
 	}
 	return string(data), nil
 }

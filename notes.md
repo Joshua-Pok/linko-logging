@@ -320,3 +320,59 @@ func validatePurchase(purchase Purchase) error {
 	return nil
 }
 ```
+
+
+# Multiple Errors
+
+
+When an operation can generate multiple errors, we should gather all the errors, and log them together as a single event
+
+
+Standard library's errors.Join function combines multiple errors into one. Returned error implements the Unwrap() []error method which returns us the original list of errors
+
+
+This allows us to treat multiple erroors as a single error, while still being able to access the individual errors if needed
+
+
+# Context and Build Information 
+
+Build information is often overlooked in prodction logging
+
+
+go build supports -ldflags which lets the linker set package variables at build time
+
+
+To use this we create a place holder string variables in code they can default them to unknown
+
+
+then we simply set them in the logger with
+
+```Go
+
+logger = logger.With(slog.String("git_sha", build.GitSHA),
+slog.String("build_time", build.BuildTime)
+    )
+```
+
+
+At build time we inject real values with -ldflags
+
+go build -ldflags "-X my/package/build.GitSHA=$(git rev-parse HEAD) -X my/package/build.BuildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+
+# Instance Context
+
+
+Different run time context matters depending on how our app runs
+
+
+We need to log:
+
+- Runtime environment name
+- server hostname
+- server > [!IMPORTANT]
+- cloud region
+- Node name or IP(for containerized)
+- DOcker Container name or kubernetes pod name
+- Host Operating System and kernel version
+- Host/Server time zone

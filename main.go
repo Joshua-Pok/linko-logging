@@ -1,11 +1,12 @@
 package main
 
 import (
+	"boot.dev/linko/internal/build"
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"github.com/pkg/errors"
 	"log"
 	"log/slog"
 	"os"
@@ -13,12 +14,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
+
+	"boot.dev/linko/internal/linkoerr"
 	"boot.dev/linko/internal/store"
 )
 
 type stackTracer interface { //type for error with a stacktrace
 	error
 	StackTrace() errors.StackTrace
+}
+
+type multiError interface {
+	error            // must have an error
+	Unwrap() []error // must implement unwrap
 }
 
 func main() {
@@ -42,19 +51,44 @@ func Close(f *bufio.Writer) error {
 }
 
 func replaceAttr(groups []string, a slog.Attr) slog.Attr {
+	if a.Value.Kind() != slog.KindAny { //slog sotres errors as kindany, we skip anything that isnt kindany
+		return a
+	}
 	err, ok := a.Value.Any().(error)
 	if !ok {
 		return a
 	}
-	if stackErr, ok := errors.AsType[stackTracer](err); ok {
-		return slog.GroupAttrs("error", slog.Attr{
-			Key:   "message",
-			Value: slog.StringValue(stackErr.Error()),
-		},
-			slog.Attr{
-				Key:   "stack_trace",
-				Value: slog.StringValue(fmt.Sprintf("%+v", stackErr.StackTrace())),
-			})
+
+	// check if this error has a stack trace attached to it
+	// ie if it was wrapped with withStack()
+	// stackErr gives us access to .stackTrace()
+	if stackErr, ok := errors.AsType[multiError](err); ok {
+		errs := stackErr.Unwrap()
+		if len(errs) > 1 {
+			//group each error under numbered keys inside a top level errors group
+			var errAttrs []slog.Attr
+			for i, e := range errs {
+				key := fmt.Sprintf("%d", i)
+				errAttrs = append(errAttrs, slog.Attr{
+					Key: key,
+					Value: slog.GroupValue(
+						slog.String("message", e.Error()),
+					),
+				})
+			}
+		}
+
+		attrs := []slog.Attr{
+			{Key: "message", Value: slog.StringValue(stackErr.Error())},
+			{Key: "stack_trace", Value: slog.StringValue(fmt.Sprintf("%+v", stackErr.Error()))},
+		}
+
+		attrs = append(attrs, linkoerr.Attrs(err)...)
+
+		return slog.Attr{
+			Key:   a.Key,
+			Value: slog.GroupValue(attrs...),
+		}
 	}
 	return slog.Attr{
 		Key:   a.Key,
@@ -84,7 +118,10 @@ func initializeLogger() (*slog.Logger, closeFunc, error) {
 		Level:       slog.LevelInfo,
 		ReplaceAttr: replaceAttr,
 	})
-	return slog.New(slog.NewMultiHandler(debugHandler, infoHandler)), func() error { return bufferedF.Flush() }, nil
+	return slog.New(slog.NewMultiHandler(debugHandler, infoHandler)).With(
+		slog.String("git_sha", build.GitSHA),
+		slog.String("build_time", build.BuildTime),
+	), func() error { return bufferedF.Flush() }, nil
 
 }
 
