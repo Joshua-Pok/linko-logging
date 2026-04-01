@@ -376,3 +376,28 @@ We need to log:
 - DOcker Container name or kubernetes pod name
 - Host Operating System and kernel version
 - Host/Server time zone
+
+
+# Request Context
+
+HTTP Requests we should log as much context with the request as possible
+
+
+we can do so with response duration example:
+
+```go 
+
+func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			next.ServeHTTP(w, r)
+
+		logger.Info("Served request",
+			/* ... other fields ... */
+			slog.Duration("duration", time.Since(start)),
+		)
+		})
+	}
+}
+```

@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"boot.dev/linko/internal/store"
 )
@@ -19,14 +21,30 @@ type server struct {
 	logger     *slog.Logger
 }
 
+type spyReadCloser struct {
+	io.ReadCloser
+	bytesRead int
+}
+
+func (r *spyReadCloser) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	r.bytesRead += n //accumulate size of all calls
+	return n, err
+}
+
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler { //takes logger, returns middleware
 	return func(next http.Handler) http.Handler { //returns middleware: takes handler, wraps it
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			spyReader := &spyReadCloser{ReadCloser: r.Body}
+			r.Body = spyReader
 			next.ServeHTTP(w, r) // let handler do its thing
 			logger.Info("Served Request",
 				slog.String("Method", r.Method),
 				slog.String("Path", r.URL.Path),
 				slog.String("Client_IP: ", r.RemoteAddr),
+				slog.Duration("duration", time.Since(start)),
+				slog.Int("request_body_bytes", spyReader.bytesRead),
 			)
 		})
 	}

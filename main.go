@@ -121,6 +121,8 @@ func initializeLogger() (*slog.Logger, closeFunc, error) {
 	return slog.New(slog.NewMultiHandler(debugHandler, infoHandler)).With(
 		slog.String("git_sha", build.GitSHA),
 		slog.String("build_time", build.BuildTime),
+		slog.String("env", os.Getenv("ENV")),
+		slog.String("hostname", os.Hostname()),
 	), func() error { return bufferedF.Flush() }, nil
 
 }
