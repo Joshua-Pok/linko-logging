@@ -152,6 +152,9 @@ logger.INfo("This is a info message")
 
 
 
+Attr is a key value pair that represents a single piece of structured log data
+
+
 # Log Levels
 
 Log levels arent specific to structured logging, but log/slog provides a build in way to handle them
@@ -224,3 +227,96 @@ Warn: Gray area between info and error: Lke a "i think you shouldnt be doing thi
 
 Errors: Errors, duh
 They should include enough information to diagnose the problem, things like error messages, stack trace and context
+
+
+# Good Logging
+
+Good logs provide enough information to diagnose where something went wrong
+
+5 Strategies
+
+1) Log each thing only once
+2) One Log per event
+3) Think about who log is for
+4) Provide Context
+5) Privacy- aware, not all relevant details can be logged 
+
+
+# Stack Traces
+Go's standard logging libraries don't give us stack traces out of the box, but several third party packages do.
+
+
+A popular one is github.com/pkg/errors
+
+# Slog Groups
+
+Slog Groups allow us to organize our stack trace messages
+
+
+slog.Group() function creates group attribute for use in log calls
+
+```Go
+
+logger.Info("user logged in", 
+    slog.Group("user",
+          slog.String("name", "frodo")
+        )
+
+    )
+
+```
+
+
+This produces nested output in JSON
+
+```Go
+
+{
+  "level": "INFO",
+  "msg": "user logged in",
+  "user": { "name": "frodo", "role": "ringbearer" }
+}
+
+```
+
+
+and dotted keys in text format:
+
+```Go  
+
+
+level=INFO msg="user logged in" user.name=frodo user.role=ringbearer
+```
+
+
+# Handle Errors Once
+
+
+We want to avoid the "log and rethrow" pattern that occurs when a sub function throws an error but returns it to its caller and then its caller alos logs the same error
+
+
+fmt.Errorf() has a %w verb that lets us wrap an error with additional context in a way that can be unwrapped later
+
+
+A better approach is to instead **Handle the error only once in parent function, while still adding information to the error in the child function using fmt.Errorf**
+
+
+```Go
+
+func order(purchase Purchase) {
+	if err := validatePurchase(purchase); err != nil {
+		slog.Error("Failed to validate purchase", "error", err)
+		return
+	}
+	// happy path...
+}
+
+func validatePurchase(purchase Purchase) error {
+	for i, item := range purchase.Items {
+		if err := validateItem(item); err != nil {
+			return fmt.Errorf("failed to validate item %d (%v): %w", i, item, err)
+		}
+	}
+	return nil
+}
+```

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -109,8 +110,7 @@ func (s *Store) Lookup(_ context.Context, short string) (string, error) {
 		return "", ErrNotFound
 	}
 	if err != nil {
-		s.logger.Info("failed to read %s: %v\n", shortcodeFilepath, err)
-		return "", err
+		return "", fmt.Errorf("read %s: %w", shortcodeFilepath, err)
 	}
 	return string(data), nil
 }

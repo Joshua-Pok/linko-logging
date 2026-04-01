@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -53,8 +54,7 @@ func (s *server) validatePassword(password, stored string) (bool, error) {
 		return false, nil
 	}
 	if err != nil {
-		fmt.Printf("error validating password: %v\n", err)
-		return false, err
+		return false, errors.WithStack(err)
 	}
 	return true, nil
 }

@@ -5,7 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
+	"github.com/pkg/errors"
 	"log"
 	"log/slog"
 	"os"
@@ -15,6 +15,11 @@ import (
 
 	"boot.dev/linko/internal/store"
 )
+
+type stackTracer interface { //type for error with a stacktrace
+	error
+	StackTrace() errors.StackTrace
+}
 
 func main() {
 
@@ -36,6 +41,27 @@ func Close(f *bufio.Writer) error {
 
 }
 
+func replaceAttr(groups []string, a slog.Attr) slog.Attr {
+	err, ok := a.Value.Any().(error)
+	if !ok {
+		return a
+	}
+	if stackErr, ok := errors.AsType[stackTracer](err); ok {
+		return slog.GroupAttrs("error", slog.Attr{
+			Key:   "message",
+			Value: slog.StringValue(stackErr.Error()),
+		},
+			slog.Attr{
+				Key:   "stack_trace",
+				Value: slog.StringValue(fmt.Sprintf("%+v", stackErr.StackTrace())),
+			})
+	}
+	return slog.Attr{
+		Key:   a.Key,
+		Value: slog.StringValue(err.Error()),
+	}
+}
+
 func initializeLogger() (*slog.Logger, closeFunc, error) {
 	logFile := os.Getenv("LINKO_LOG_FILE")
 
@@ -50,11 +76,13 @@ func initializeLogger() (*slog.Logger, closeFunc, error) {
 	bufferedF := bufio.NewWriterSize(f, 1024)
 
 	debugHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelDebug, //debug and above
+		Level:       slog.LevelDebug, //debug and above
+		ReplaceAttr: replaceAttr,
 	})
 
 	infoHandler := slog.NewTextHandler(bufferedF, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level:       slog.LevelInfo,
+		ReplaceAttr: replaceAttr,
 	})
 	return slog.New(slog.NewMultiHandler(debugHandler, infoHandler)), func() error { return bufferedF.Flush() }, nil
 
