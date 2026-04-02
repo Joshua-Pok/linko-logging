@@ -400,4 +400,31 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 		})
 	}
 }
+
 ```
+
+
+# User Context
+
+We want to log authentication requests and response as well
+
+
+We can do this with **pointer-based log context** 
+
+We put a pointer to a shared mutual struct in context before serving the request
+
+
+# Inter-Process Context
+
+In microservice architecture we usually want to propogate a request ID across services so related logs can be correlated
+
+
+# Metrics
+
+
+We use **R.E.D** and **U.S.E** to decide which metrics we should be measuring
+
+
+Rate: Number of requests per second
+Errors: Number of requests that are failing
+Duration: How long does requests take

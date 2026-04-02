@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 
 	"boot.dev/linko/internal/linkoerr"
 	"boot.dev/linko/internal/store"
@@ -22,7 +22,7 @@ import (
 
 type stackTracer interface { //type for error with a stacktrace
 	error
-	StackTrace() errors.StackTrace
+	StackTrace() pkgerrors.StackTrace
 }
 
 type multiError interface {
@@ -118,11 +118,13 @@ func initializeLogger() (*slog.Logger, closeFunc, error) {
 		Level:       slog.LevelInfo,
 		ReplaceAttr: replaceAttr,
 	})
+
+	hostname, _ := os.Hostname()
 	return slog.New(slog.NewMultiHandler(debugHandler, infoHandler)).With(
 		slog.String("git_sha", build.GitSHA),
 		slog.String("build_time", build.BuildTime),
 		slog.String("env", os.Getenv("ENV")),
-		slog.String("hostname", os.Hostname()),
+		slog.String("hostname", hostname),
 	), func() error { return bufferedF.Flush() }, nil
 
 }
